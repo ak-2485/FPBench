@@ -18,7 +18,7 @@
     or private rec sig struct then to true try type val virtual
     when while with))
 
-(define vcfloat-header (const "From vcfloat Require Import FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic Binary List ListNotations.\nSection WITHNANS.\nContext {NANS:Nans}.\n\n"))
+(define vcfloat-header (const "From vcfloat Require Import Automate FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSection WITHNANS.\nContext {NANS:Nans}.\n\n"))
 
 (define vcfloat-footer (const "End WITHNANS."))
 
@@ -45,6 +45,8 @@
 
 (define/match (vcfloat-type->suffix type)
   [("boolean") ""]
+  [('binary32) "%F32"]
+  [('binary64) "%F64"]
   [("ftype Tdouble") "%F64"]
   [("ftype Tsingle") "%F32"]
   [("Z") "%Z"])
@@ -70,7 +72,8 @@
 
 (define (round-const->vcfloat x ctx )
   (define type (type->vcfloat-type (ctx-lookup-prop ctx ':precision)))
-  (format "cast ~a ~a (~a)" type type  (trim-infix-parens x)))
+  (define suffix (vcfloat-type->suffix (ctx-lookup-prop ctx ':precision)))
+  (format "cast ~a ~a (~a)~a" type type (trim-infix-parens x) suffix))
 
 (define (operator->vcfloat op args ctx)
   (define type (type->vcfloat (ctx-lookup-prop ctx ':precision)))
@@ -299,4 +302,4 @@
     #:visitor vcfloat-visitor
     #:fix-name fix-name))
 
-(define-compiler '("vcfloat") vcfloat-header core->vcfloat vcfloat-footer vcfloat-supported)
+(define-compiler '("v") vcfloat-header core->vcfloat vcfloat-footer vcfloat-supported)
