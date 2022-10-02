@@ -24,7 +24,8 @@
          "src/core2smtlib2.rkt"
          "src/core2sollya.rkt"
          "src/core2tex.rkt"
-         "src/core2wls.rkt")
+         "src/core2vcfloat.rkt"
+	 "src/core2wls.rkt")
 
 (provide export-main)
 
