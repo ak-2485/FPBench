@@ -21,9 +21,9 @@
     or private rec sig struct then to true try type val virtual
     when while with))
 
-(define vcfloat-header (const "From vcfloat Require Import Automate FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSet Bullet Behavior \"Strict Subproofs\".\nSection WITHNANS.\nContext {NANS:Nans}.\n\n"))
+(define vcfloat-header (const "From vcfloat Require Import Automate Prune FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSet Bullet Behavior \"Strict Subproofs\".\nSection WITHNANS.\nContext {NANS:Nans}.\nOpen Scope R_scope.\n\n"))
 
-(define vcfloat-footer (const "End WITHNANS."))
+(define vcfloat-footer (const "End WITHNANS.\nClose R_scope."))
 
 (define (fix-name name)
   (apply string-append
@@ -213,7 +213,18 @@
         (format "Definition ~a_expr := \n ltac:(let e' :=  HO_reify_float_expr constr:(~a) ~a in exact e').\n" expr-name var-string-list-reify expr-name)
         ""))
 
-        (format "~a\n~a\n~a\n~a\n~a\n~a" def-string-list-bmap def-string-bmap def-string-list-vmap def-string-vmap def-string def-string-expr))
+  (define lemma-string
+        (format "Lemma ~a_bound:\n\tfind_and_prove_roundoff_bound ~a_bmap ~a_expr.\nProof.\neexists. intro. prove_roundoff_bound.\n -\ntime \"prove_rndval\" prove_rndval; time \"interval\" interval.\n-\ntime \"prove_roundoff_bound2\" prove_roundoff_bound2;\ntime \"prune_terms\" (prune_terms (cutoff 30)).\ntime \"do_interval\" do_interval.\nDefined.\n" expr-name expr-name expr-name))
+
+
+  (define bound-string1
+    (format "Definition ~a_bound_val := Eval simpl in (proj1_sig ~a_bound)." expr-name expr-name))
+
+  (define bound-string2
+    (format "Print ~a_bound_val." expr-name))
+
+  (format "~a\n~a\n~a\n~a\n~a\n~a\n~a\n" def-string-list-bmap def-string-bmap def-string def-string-expr lemma-string bound-string1 bound-string2))
+
 
 (define-expr-visitor ml-visitor vcfloat-visitor
   [(visit-let_ vtor let_ vars vals body #:ctx ctx)
