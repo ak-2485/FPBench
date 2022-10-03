@@ -5,20 +5,23 @@
 
 (define vcfloat-supported
   (supported-list
-    fpcore-ops
+    (invert-op-proc
+      (curry set-member?
+        '(while)))
     fpcore-consts
-    (curry set-member? '(binary32 binary64 integer))
-    (invert-rnd-mode-proc (curry equal? 'nearestEven))))
+    (curry set-member? '(binary32 binary64 integer real))
+    ieee754-rounding-modes))
+
 
 (define vcfloat-reserved          ; Language-specific reserved names (avoid name collision)
-  '(and as asssert asr begin class constraint do done down to else
+  '(and as assert begin class constraint do done down to else
     end exception external false for fun function funtor if in
     include inherit initializer land lazy let lor lsl lsr lxor
     match method mod module mutable new nonrec object of open
     or private rec sig struct then to true try type val virtual
     when while with))
 
-(define vcfloat-header (const "From vcfloat Require Import Automate FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSection WITHNANS.\nContext {NANS:Nans}.\n\n"))
+(define vcfloat-header (const "From vcfloat Require Import Automate FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSet Bullet Behavior \"Strict Subproofs\".\nSection WITHNANS.\nContext {NANS:Nans}.\n\n"))
 
 (define vcfloat-footer (const "End WITHNANS."))
 
@@ -49,6 +52,8 @@
   [('binary64) "%F64"]
   [("ftype Tdouble") "%F64"]
   [("ftype Tsingle") "%F32"]
+  [("Tdouble") "%F64"]
+  [("Tsingle") "%F32"]
   [("Z") "%Z"])
 
 (define/match (type->vcfloat type)
@@ -67,8 +72,8 @@
   (format "cast ~a _ (~a)" type_to  (trim-infix-parens x)))
 
 (define (round-outer->vcfloat x ctx1 ctx2)
-  (define type_to (type->vcfloat-type (ctx-lookup-prop ctx1 ':precision)))
-  (format "cast ~a _ (~a)" type_to  (trim-infix-parens x)))
+  (define type_to (type->vcfloat-type (ctx-lookup-prop ctx2 ':precision)))
+  (format "cast ~a _ (~a)" type_to  x))
 
 (define (round-const->vcfloat x ctx )
   (define type (type->vcfloat-type (ctx-lookup-prop ctx ':precision)))
@@ -81,16 +86,10 @@
   (match (cons op args)
    [(list '- a) (format "(-~a)" a)]
    [(list (or '+ '- '* '/) a b) (format "(~a ~a ~a)~a"
-      (round->vcfloat a type_cast ) op (round->vcfloat b type_cast )
-      (vcfloat-type->suffix type))]
+      a op b (vcfloat-type->suffix type))]
    [_
     (define args* (string-join args " "))
      (format "(Float.~a ~a)" op args*)]))
-
-(define (number->vcfloat x)
-  (if (negative? x)
-      (format "(-~a)" (abs (real->double-flonum x)))
-      (~a (real->double-flonum x))))
 
 (define constant->expr
   (match-lambda
@@ -111,7 +110,9 @@
 
 (define (constant->vcfloat x ctx)
   (define cexpr (constant->expr x))
-  (round-const->vcfloat cexpr ctx))
+  (define type (type->vcfloat-type (ctx-lookup-prop ctx ':precision)))
+  (define suffix (vcfloat-type->suffix type))
+  (format "(~a)~a" cexpr suffix))
 
 (define (params->vcfloat args arg-ctxs)
   (string-join
@@ -131,6 +132,9 @@
       (string-contains? body "let")))
 
 (define (program->vcfloat name args arg-ctxs body ctx)
+  (define expr-name
+    (let ([name* (ctx-lookup-prop ctx ':name #f)])
+      (if name* (let-values ([(_ name) (ctx-unique-name ctx name*)]) name) name)))
   (define pre ((compose canonicalize remove-let)
                 (ctx-lookup-prop ctx ':pre 'TRUE)))
   (define var-ranges
@@ -180,33 +184,33 @@
 
   (define def-string-list-bmap
     (if (non-empty-string? body)
-        (format "Definition ~a_bmap_list := ~a.\n" name var-string-list-bmap)
+        (format "Definition ~a_bmap_list := ~a.\n" expr-name var-string-list-bmap)
         ""))
 
   (define def-string-bmap
     (if (non-empty-string? body)
-        (format "Definition ~a_bmap :=\n ltac:(let z := compute_PTree (boundsmap_of_list ~a_bmap_list) in exact z).\n" name name)
+        (format "Definition ~a_bmap :=\n ltac:(let z := compute_PTree (boundsmap_of_list ~a_bmap_list) in exact z).\n" expr-name expr-name)
         ""))
 
   (define def-string-list-vmap
     (if (non-empty-string? body)
-        (format "Definition ~a_vmap_list ~a := ~a.\n" name (params->vcfloat args arg-ctxs) var-string-list-vmap)
+        (format "Definition ~a_vmap_list ~a := ~a.\n" expr-name (params->vcfloat args arg-ctxs) var-string-list-vmap)
         ""))
 
   (define def-string-vmap
     (if (non-empty-string? body)
-        (format "Definition ~a_vmap ~a :=\n ltac:(let z := compute_PTree (valmap_of_list (~a_vmap_list ~a)) in exact z).\n" name (params->vcfloat args arg-ctxs) name (params->vcfloat-fun-args args))
+        (format "Definition ~a_vmap ~a :=\n ltac:(let z := compute_PTree (valmap_of_list (~a_vmap_list ~a)) in exact z).\n" expr-name (params->vcfloat args arg-ctxs) expr-name (params->vcfloat-fun-args args))
         ""))
 
 
   (define def-string
     (if (non-empty-string? body)
-        (format "Definition ~a ~a := \n  ~a.\n" name (params->vcfloat args arg-ctxs) body)
+        (format "Definition ~a ~a := \n  ~a.\n" expr-name (params->vcfloat args arg-ctxs) body)
         ""))
 
   (define def-string-expr
     (if (non-empty-string? body)
-        (format "Definition ~a_expr := \n ltac:(let e' :=  HO_reify_float_expr constr:(~a) ~a in exact e').\n" name var-string-list-reify name)
+        (format "Definition ~a_expr := \n ltac:(let e' :=  HO_reify_float_expr constr:(~a) ~a in exact e').\n" expr-name var-string-list-reify expr-name)
         ""))
 
         (format "~a\n~a\n~a\n~a\n~a\n~a" def-string-list-bmap def-string-bmap def-string-list-vmap def-string-vmap def-string def-string-expr))
@@ -291,6 +295,7 @@
     (printf "~a\n~ain\n" (trim-infix-parens body*) indent)
     (values (format "~a~a ~a" indent fn-name (string-join vars* " "))
             body-ctx)])
+
 
 (define core->vcfloat
   (make-ml-compiler "vcfloat"
