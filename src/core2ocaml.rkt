@@ -15,7 +15,7 @@
     (curry equal? 'nearestEven)))
 
 (define ocaml-reserved          ; Language-specific reserved names (avoid name collision)
-  '(and as asssert asr begin class constraint do done down to else
+  '(and as assert begin class constraint do done down to else
     end exception external false for fun function funtor if in
     include inherit initializer land lazy let lor lsl lsr lxor
     match method mod module mutable new nonrec object of open
