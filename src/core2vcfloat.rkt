@@ -23,7 +23,7 @@
 
 (define vcfloat-header (const "From vcfloat Require Import Automate Prune FPLang FPLangOpt RAux Rounding Reify Float_notations.\nRequire Import IntervalFlocq3.Tactic.\nImport Binary List ListNotations.\nSet Bullet Behavior \"Strict Subproofs\".\nSection WITHNANS.\nContext {NANS:Nans}.\nOpen Scope R_scope.\n\n"))
 
-(define vcfloat-footer (const "End WITHNANS.\nClose R_scope."))
+(define vcfloat-footer (const "End WITHNANS.\nClose Scope R_scope."))
 
 (define (fix-name name)
   (apply string-append
@@ -213,15 +213,26 @@
         (format "Definition ~a_expr := \n ltac:(let e' :=  HO_reify_float_expr constr:(~a) ~a in exact e').\n" expr-name var-string-list-reify expr-name)
         ""))
 
-  (define lemma-string
-        (format "Lemma ~a_bound:\n\tfind_and_prove_roundoff_bound ~a_bmap ~a_expr.\nProof.\neexists. intro. prove_roundoff_bound.\n -\ntime \"prove_rndval\" prove_rndval; time \"interval\" interval.\n-\ntime \"prove_roundoff_bound2\" prove_roundoff_bound2;\ntime \"prune_terms\" (prune_terms (cutoff 30)).\ntime \"do_interval\" do_interval.\nDefined.\n" expr-name expr-name expr-name))
+  (define id-tac-string
+    (format "idtac \"Starting ~a\"." expr-name))
 
+  (define tactic1-string
+    (format "\neexists. intro. prove_roundoff_bound."))
+
+  (define tactic2-string
+    (format "\n-\ntime \"prove_rndval\" prove_rndval; time \"interval\" interval."))
+
+  (define tactic3-string
+    (format "\n-\ntime \"prove_roundoff_bound2\" prove_roundoff_bound2;\ntime \"prune_terms\" (prune_terms (cutoff 30)).\ntime \"do_interval\" do_interval."))
+
+  (define lemma-string
+        (format "Lemma ~a_bound:\n\tfind_and_prove_roundoff_bound ~a_bmap ~a_expr.\nProof.\n~a~a~a~a\nDefined.\n"  expr-name expr-name expr-name id-tac-string tactic1-string tactic2-string tactic3-string))
 
   (define bound-string1
-    (format "Definition ~a_bound_val := Eval simpl in (proj1_sig ~a_bound)." expr-name expr-name))
+    (format "Definition ~a_bound_val := Eval simpl in ~a_bound." expr-name expr-name))
 
   (define bound-string2
-    (format "Print ~a_bound_val." expr-name))
+    (format "Compute ltac:(ShowBound' ~a_bound_val)." expr-name))
 
   (format "~a\n~a\n~a\n~a\n~a\n~a\n~a\n" def-string-list-bmap def-string-bmap def-string def-string-expr lemma-string bound-string1 bound-string2))
 
